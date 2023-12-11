@@ -1,0 +1,10 @@
+syntax = "proto3";
+package utils;
+
+option go_package = "github.com/SashwatAnagolum/picodb/utils";
+
+message PicoDBServerMessage {
+    string Key = 1;
+    string Value = 2;
+    int32 MessageType = 3;
+}

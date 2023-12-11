@@ -1,0 +1,13 @@
+syntax = "proto3";
+package utils;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/SashwatAnagolum/picodb/utils";
+
+message PicoDBRequest {
+    string Key = 1;
+    string Value = 2;
+    google.protobuf.Timestamp Time = 3;
+    int32 RequestType = 4;
+}

@@ -1,0 +1,9 @@
+syntax = "proto3";
+package utils;
+
+option go_package = "github.com/SashwatAnagolum/picodb/utils";
+
+message PicoDBResult {
+    string Key = 1;
+    string Value = 2;
+}
