@@ -1,26 +1,47 @@
 package clientlib
 
 import (
-	"net"
-
 	"github.com/SashwatAnagolum/picodb/clientlib/filters"
 	"github.com/SashwatAnagolum/picodb/clientlib/promise"
 	"github.com/SashwatAnagolum/picodb/utils"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type PicoDBClient struct {
-	ServerConnection *net.TCPConn
+	ServerAddress    string
 	RequestFilter    filters.KVPFilterIF
+	ServerConnection *grpc.ClientConn
+	ServerClient     *utils.PicoDBServerClient
 }
 
-func NewPicoDBClient(connection *net.TCPConn) PicoDBClient {
-	client := PicoDBClient{
-		ServerConnection: connection,
+func NewPicoDBClient(serverAddress string) (*PicoDBClient, error) {
+	var opts []grpc.DialOption
+	opts = append(
+		opts,
+		grpc.WithTransportCredentials(
+			insecure.NewCredentials()))
+
+	conn, err := grpc.Dial(serverAddress, opts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	serverClient := utils.NewPicoDBServerClient(conn)
+
+	client := &PicoDBClient{
+		ServerAddress: serverAddress,
+		ServerClient:  &serverClient,
 		RequestFilter: &filters.IdentityKVPFilter{
 			AbsKVPFilter: filters.AbsKVPFilter{}}}
 
-	return client
+	return client, nil
+}
+
+func (client *PicoDBClient) CloseServerConnection() {
+	defer client.ServerConnection.Close()
 }
 
 func (client *PicoDBClient) TransformData(
@@ -31,9 +52,9 @@ func (client *PicoDBClient) TransformData(
 }
 
 func (client *PicoDBClient) sendRequest(
-	request *utils.PicoDBRequest) *promise.PicoDBResultPromise {
+	request *utils.PicoDBRequest) *promise.PicoDBResponsePromise {
 	promise := promise.NewResultPromise()
-	promise.Start(client.ServerConnection, request)
+	promise.Start(client.ServerClient, request)
 
 	return promise
 }
@@ -51,7 +72,7 @@ func (client *PicoDBClient) makeRequest(
 }
 
 func (client *PicoDBClient) Put(
-	key string, value string) *promise.PicoDBResultPromise {
+	key string, value string) *promise.PicoDBResponsePromise {
 	request := client.makeRequest(key, value, utils.PUT)
 	promise := client.sendRequest(request)
 
@@ -59,7 +80,7 @@ func (client *PicoDBClient) Put(
 }
 
 func (client *PicoDBClient) Get(
-	key string) *promise.PicoDBResultPromise {
+	key string) *promise.PicoDBResponsePromise {
 	request := client.makeRequest(key, "", utils.GET)
 	promise := client.sendRequest(request)
 
@@ -67,7 +88,7 @@ func (client *PicoDBClient) Get(
 }
 
 func (client *PicoDBClient) Delete(
-	key string) *promise.PicoDBResultPromise {
+	key string) *promise.PicoDBResponsePromise {
 	request := client.makeRequest(key, "", utils.DELETE)
 	promise := client.sendRequest(request)
 

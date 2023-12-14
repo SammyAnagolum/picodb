@@ -13,6 +13,7 @@ func NewLoggerFactory() LoggerFactory {
 
 	loggerMap["requestcount"] = NewRequestCountLogger
 	loggerMap["requesttimes"] = NewRequestTimeLogger
+	loggerMap["null"] = NewNullLogger
 
 	return LoggerFactory{loggers: loggerMap}
 }

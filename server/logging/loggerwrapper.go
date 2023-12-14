@@ -11,6 +11,11 @@ type LoggerWrapper struct {
 	NewLogger LoggerIF
 }
 
+func NewLoggerWrapper(wrappee LoggerIF, newLogger LoggerIF) *LoggerWrapper {
+	return &LoggerWrapper{
+		Wrappee: wrappee, NewLogger: newLogger}
+}
+
 func (wrapper *LoggerWrapper) Log(request *utils.PicoDBRequest) {
 	wrapper.NewLogger.Log(request)
 	wrapper.Wrappee.Log(request)
@@ -34,8 +39,4 @@ func (wrapper *LoggerWrapper) GetLogs() (string, error) {
 func (wrapper *LoggerWrapper) ResetLogs() {
 	wrapper.NewLogger.ResetLogs()
 	wrapper.Wrappee.ResetLogs()
-}
-
-func (wrapper *LoggerWrapper) GetName() string {
-	return wrapper.NewLogger.GetName()
 }

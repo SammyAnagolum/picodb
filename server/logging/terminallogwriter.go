@@ -5,7 +5,7 @@ import "fmt"
 type TerminalLogWriter struct {
 }
 
-func NewTerminalLogWriter() TerminalLogWriter {
+func NewTerminalLogWriter() LogWriterIF {
 	return TerminalLogWriter{}
 }
 

@@ -47,7 +47,3 @@ func (wrapper *LoggerWriterWrapper) GetLogs() (string, error) {
 func (wrapper *LoggerWriterWrapper) ResetLogs() {
 	wrapper.Logger.ResetLogs()
 }
-
-func (wrapper *LoggerWriterWrapper) GetName() string {
-	return wrapper.Logger.GetName()
-}

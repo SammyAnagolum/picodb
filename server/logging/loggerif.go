@@ -6,5 +6,4 @@ type LoggerIF interface {
 	Log(request *utils.PicoDBRequest)
 	GetLogs() (string, error)
 	ResetLogs()
-	GetName() string
 }

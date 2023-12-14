@@ -1,0 +1,10 @@
+syntax = "proto3";
+package utils;
+
+option go_package = "github.com/SashwatAnagolum/picodb/utils";
+
+import "utils/messagetypes.proto";
+
+service PicoDBServer {
+    rpc ProcessRequest (PicoDBRequest) returns (PicoDBResponse);
+}

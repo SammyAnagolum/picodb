@@ -14,9 +14,8 @@ type RequestTimeLogger struct {
 
 func NewRequestTimeLogger() LoggerIF {
 	return &RequestTimeLogger{
-		AbsLogger: AbsLogger{},
-		times:     make([]time.Time, 0, 1024),
-		Name:      "RequestTimeLogger"}
+		AbsLogger: AbsLogger{Name: "RequestTimeLogger"},
+		times:     make([]time.Time, 0, 1024)}
 }
 
 func (logger *RequestTimeLogger) Log(request *utils.PicoDBRequest) {
@@ -24,13 +23,9 @@ func (logger *RequestTimeLogger) Log(request *utils.PicoDBRequest) {
 }
 
 func (logger *RequestTimeLogger) GetLogs() (string, error) {
-	return logger.MarshalData(logger.Name, logger.times)
+	return logger.MarshalData(logger.times)
 }
 
 func (logger *RequestTimeLogger) ResetLogs() {
 	logger.times = make([]time.Time, 0, 1024)
-}
-
-func (logger *RequestTimeLogger) GetName() string {
-	return logger.Name
 }

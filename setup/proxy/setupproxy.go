@@ -1,19 +1,22 @@
 package main
 
 import (
-	"sync"
+	"flag"
 
 	"github.com/SashwatAnagolum/picodb/proxy"
 )
 
 func main() {
-	consistentHash := proxy.ConsistentHash{NumSlots: 1024}
-	server := proxy.ProxyServer{
-		Hash:           &consistentHash,
-		IPAddress:      "127.0.0.1",
-		Port:           "3333",
-		ServerChannels: make(map[uint32]chan []proxy.ClientRequest),
-		ChannelsLock:   &sync.RWMutex{}}
+	var serverIPAddr, observerIPAddr string
 
-	server.Listen()
+	flag.StringVar(&serverIPAddr, "proxy_ip",
+		"127.0.0.1:3333", "IP Address and Port for the Proxy server")
+
+	flag.StringVar(&observerIPAddr, "proxy_observer_ip",
+		"127.0.0.1:3334", "IP Address and Port for the storage node observer server")
+
+	flag.Parse()
+
+	proxyServer := proxy.NewProxyServer(serverIPAddr, observerIPAddr, 1024)
+	proxyServer.Start()
 }

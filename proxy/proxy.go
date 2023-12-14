@@ -1,101 +1,188 @@
 package proxy
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/SashwatAnagolum/picodb/utils"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-type ClientRequest struct {
-	clientConn *net.Conn
-	request    *utils.PicoDBRequest
-}
-
 type ProxyServer struct {
-	IPAddress      string
-	Hash           *ConsistentHash
-	Port           string
-	ServerChannels map[uint32]chan []ClientRequest
-	ChannelsLock   *sync.RWMutex
+	IPAddress          string
+	ObserverIPAddress  string
+	Hash               *ConsistentHash
+	ServerClients      map[uint32]*utils.PicoDBServerClient
+	HeartbeatChannels  map[uint32]chan bool
+	ChannelsLock       *sync.RWMutex
+	grpcServer         *grpc.Server
+	grpcObserverServer *grpc.Server
+	utils.UnimplementedPicoDBServerServer
+	utils.UnimplementedPicoDBObserverServer
 }
 
-func (server *ProxyServer) cleanUpChannel(c chan []ClientRequest, storageServerID uint32) {
-	server.ChannelsLock.Lock()
-	delete(server.ServerChannels, storageServerID)
-	server.ChannelsLock.Unlock()
+func NewProxyServer(address string, observerAddress string, numSlots uint32) *ProxyServer {
+	ch := ConsistentHash{NumSlots: numSlots}
 
-	close(c)
+	server := ProxyServer{
+		Hash:              &ch,
+		IPAddress:         address,
+		ObserverIPAddress: observerAddress,
+		ServerClients:     make(map[uint32]*utils.PicoDBServerClient),
+		HeartbeatChannels: make(map[uint32]chan bool),
+		ChannelsLock:      &sync.RWMutex{}}
+
+	return &server
 }
 
-func (server *ProxyServer) handleServerCommunication(
-	conn *net.Conn) {
-	storageServerID := server.Hash.hashServerIP(conn)
-
-	storageServerCommChan := make(chan []ClientRequest, 256)
-
-	server.ChannelsLock.Lock()
-	server.Hash.AddToHashRing(storageServerID)
-	server.ServerChannels[storageServerID] = storageServerCommChan
-	server.ChannelsLock.Unlock()
-
-	defer server.cleanUpChannel(storageServerCommChan, storageServerID)
-
-	serverComm := NewServerCommunicator(conn, storageServerID, storageServerCommChan)
-	// serverComm.Listen()
-}
-
-func (server *ProxyServer) serviceClientRequest(
-	conn *net.Conn, buf []byte, len int) {
-	// defer (*conn).Close()
-
-	var request utils.PicoDBRequest
-	proto.Unmarshal(buf[:len], &request)
-
+func (server *ProxyServer) ProcessRequest(
+	ctx context.Context,
+	request *utils.PicoDBRequest) (*utils.PicoDBResponse, error) {
 	keyHash := server.Hash.hashString(request.Key)
-	fmt.Println(server.Hash.GetNextServerIDOnRing(keyHash))
-
-	responseBuffer, err := proto.Marshal(&utils.PicoDBResult{Key: "sammy", Value: "Boss"})
+	serverID, err := server.Hash.GetNextServerIDOnRing(keyHash)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Println(err)
+		return &utils.PicoDBResponse{Key: request.Key}, err
 	}
 
-	_, err = (*conn).Write(responseBuffer)
+	server.ChannelsLock.RLock()
+	storageServerClient, exists := server.ServerClients[serverID]
+	server.ChannelsLock.RUnlock()
 
-	if err != nil {
-		fmt.Println(err.Error())
+	if !exists {
+		return &utils.PicoDBResponse{Key: request.Key}, errors.New(
+			"storage server does not exist")
 	}
+
+	return (*storageServerClient).ProcessRequest(
+		context.Background(), request)
 }
 
-func (server *ProxyServer) serviceRequest(conn *net.Conn) {
-	buf := make([]byte, 2048)
-	len, err := (*conn).Read(buf[:])
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	if len > 1 {
-		server.serviceClientRequest(conn, buf, len)
-	} else {
-		server.handleServerCommunication(conn)
-	}
-
-}
-
-func (server *ProxyServer) Listen() {
-	listener, _ := net.Listen("tcp", server.IPAddress+":"+server.Port)
+func (server *ProxyServer) ManageHeartbeats(
+	storageServerID uint32, hbChan chan bool) {
+	shouldExit := false
+	heartbeatTimer := time.NewTimer(10 * time.Second)
 
 	for {
-		connection, err := listener.Accept()
+		select {
+		case <-hbChan:
+			heartbeatTimer.Stop()
+			heartbeatTimer = time.NewTimer(10 * time.Second)
+		case <-heartbeatTimer.C:
+			server.ChannelsLock.Lock()
+			delete(server.HeartbeatChannels, storageServerID)
+			delete(server.ServerClients, storageServerID)
+			server.ChannelsLock.Unlock()
+			shouldExit = true
+		}
 
-		fmt.Println("Received!")
-
-		if err == nil {
-			go server.serviceRequest(&connection)
+		if shouldExit {
+			break
 		}
 	}
+}
+
+func (server *ProxyServer) Notify(
+	ctx context.Context,
+	message *utils.PicoDBServerMessage) (*utils.PicoDBServerMessage, error) {
+	storageServerID := server.Hash.hashString(message.SourceIPAddress)
+
+	server.ChannelsLock.RLock()
+	_, exists := server.HeartbeatChannels[storageServerID]
+	server.ChannelsLock.RUnlock()
+
+	if !exists {
+		newServerClient, err := server.ConstructStorageServerClient(
+			message.SourceIPAddress)
+
+		if err != nil {
+			fmt.Println(err)
+			return &utils.PicoDBServerMessage{}, err
+		} else {
+			heartbeatChan := make(chan bool)
+
+			server.ChannelsLock.Lock()
+			server.ServerClients[storageServerID] = &newServerClient
+			server.HeartbeatChannels[storageServerID] = heartbeatChan
+			server.ChannelsLock.Unlock()
+
+			server.Hash.AddToHashRing(storageServerID)
+			go server.ManageHeartbeats(storageServerID, heartbeatChan)
+		}
+	}
+
+	server.HeartbeatChannels[storageServerID] <- true
+
+	return &utils.PicoDBServerMessage{}, nil
+}
+
+func (server *ProxyServer) ConstructStorageServerClient(
+	storageServerAddress string) (utils.PicoDBServerClient, error) {
+	var opts []grpc.DialOption
+	opts = append(
+		opts,
+		grpc.WithTransportCredentials(
+			insecure.NewCredentials()))
+
+	conn, err := grpc.Dial(storageServerAddress, opts...)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	serverClient := utils.NewPicoDBServerClient(conn)
+
+	return serverClient, nil
+}
+
+func (server *ProxyServer) StartObserverServer() {
+	listener, err := net.Listen("tcp", server.ObserverIPAddress)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var serverOpts []grpc.ServerOption
+	grpcServer := grpc.NewServer(serverOpts...)
+
+	utils.RegisterPicoDBObserverServer(grpcServer, server)
+
+	server.grpcObserverServer = grpcServer
+
+	grpcServer.Serve(listener)
+}
+
+func (server *ProxyServer) StartServer() {
+	listener, err := net.Listen("tcp", server.IPAddress)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var serverOpts []grpc.ServerOption
+	grpcServer := grpc.NewServer(serverOpts...)
+
+	utils.RegisterPicoDBServerServer(grpcServer, server)
+
+	server.grpcServer = grpcServer
+
+	grpcServer.Serve(listener)
+}
+
+func (server *ProxyServer) Start() {
+	go server.StartObserverServer()
+	server.StartServer()
+}
+
+func (server *ProxyServer) Close() {
+	defer server.grpcServer.GracefulStop()
 }

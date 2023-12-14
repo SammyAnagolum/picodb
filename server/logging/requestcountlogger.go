@@ -5,14 +5,12 @@ import "github.com/SashwatAnagolum/picodb/utils"
 type RequestCountLogger struct {
 	AbsLogger
 	counts map[string]int
-	Name   string
 }
 
 func NewRequestCountLogger() LoggerIF {
 	return &RequestCountLogger{
-		AbsLogger: AbsLogger{},
-		counts:    make(map[string]int),
-		Name:      "RequestCountLogger"}
+		AbsLogger: AbsLogger{Name: "RequestCountLogger"},
+		counts:    make(map[string]int)}
 }
 
 func (logger *RequestCountLogger) Log(request *utils.PicoDBRequest) {
@@ -26,13 +24,9 @@ func (logger *RequestCountLogger) Log(request *utils.PicoDBRequest) {
 }
 
 func (logger *RequestCountLogger) GetLogs() (string, error) {
-	return logger.MarshalData(logger.Name, logger.counts)
+	return logger.MarshalData(logger.counts)
 }
 
 func (logger *RequestCountLogger) ResetLogs() {
 	logger.counts = make(map[string]int)
-}
-
-func (logger *RequestCountLogger) GetName() string {
-	return logger.Name
 }

@@ -1,50 +1,38 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"net"
+	"time"
 
 	"github.com/SashwatAnagolum/picodb/clientlib"
 )
 
 func main() {
-	serverAddress, err := net.ResolveTCPAddr("tcp", "127.0.0.1:3333")
+	var proxyIPAddr string
+
+	flag.StringVar(&proxyIPAddr, "proxy_ip",
+		"127.0.0.1:3333", "IP Address and Port for the proxy server")
+
+	dbClient, err := clientlib.NewPicoDBClient(proxyIPAddr)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Println(err)
 		return
 	}
 
-	conn, err := net.DialTCP("tcp", nil, serverAddress)
+	fmt.Println(time.Now())
 
-	if err != nil {
-		fmt.Println(err.Error())
-		return
+	for i := 0; i < 1; i++ {
+		promise := dbClient.Put("SWENG421", "fun!")
+		fmt.Println(promise.WaitForResult())
+		promise = dbClient.Put("CMPSC445", "fun!")
+		fmt.Println(promise.WaitForResult())
+		promise = dbClient.Put("SWENG480", "fun!")
+		fmt.Println(promise.WaitForResult())
+		promise = dbClient.Put("CMPEN441", "fun!")
+		fmt.Println(promise.WaitForResult())
 	}
 
-	dbClient := clientlib.NewPicoDBClient(conn)
-
-	promise := dbClient.Put("SWENG421", "fun!")
-
-	fmt.Println(promise.Ready())
-
-	fmt.Println(promise.WaitForResult())
-
-	// m := &utils.KeyValuePair{Key: "sammy", Value: "theboss"}
-	// out, err := proto.Marshal(m)
-
-	// if err == nil {
-	// 	fmt.Println(out)
-	// }
-
-	// n := &utils.KeyValuePair{}
-	// err = proto.Unmarshal(out, n)
-	// fmt.Println(n)
-
-	// concFilt1 := filters.EncryptKVPFilter{Data: &utils.KeyValuePair{Key: "sammy", Value: "puj"}}
-	// concFilt2 := filters.EncryptKVPFilter{Source: &concFilt1}
-
-	// out := concFilt2.GetData()
-
-	// fmt.Println(out)
+	fmt.Println(time.Now())
 }

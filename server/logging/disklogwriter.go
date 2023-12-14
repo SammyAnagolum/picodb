@@ -6,15 +6,18 @@ import (
 )
 
 type DiskLogWriter struct {
-	Filepath string
+	Filepath  string
+	numWrites int
 }
 
-func NewDiskLogWriter(filepath string) DiskLogWriter {
-	return DiskLogWriter{Filepath: filepath}
+func NewDiskLogWriter() LogWriterIF {
+	return DiskLogWriter{Filepath: "./saved_logs", numWrites: 0}
 }
 
 func (writer DiskLogWriter) WriteLogs(logs string) {
-	file, err := os.OpenFile(writer.Filepath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	file, err := os.OpenFile(
+		fmt.Sprintf("%s_%d.txt", writer.Filepath, writer.numWrites),
+		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 
 	if err != nil {
 		fmt.Println(err)
@@ -28,4 +31,6 @@ func (writer DiskLogWriter) WriteLogs(logs string) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	writer.numWrites += 1
 }

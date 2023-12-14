@@ -1,23 +1,22 @@
 package promise
 
 import (
-	"net"
+	"context"
 	"sync"
 
 	"github.com/SashwatAnagolum/picodb/utils"
-	"google.golang.org/protobuf/proto"
 )
 
-type PicoDBResultPromise struct {
+type PicoDBResponsePromise struct {
 	IsReady  bool
-	Result   *utils.PicoDBResult
+	Result   *utils.PicoDBResponse
 	Error    error
 	CondVar  *sync.Cond
 	ReadLock *sync.Mutex
 }
 
-func NewResultPromise() *PicoDBResultPromise {
-	return &PicoDBResultPromise{
+func NewResultPromise() *PicoDBResponsePromise {
+	return &PicoDBResponsePromise{
 		IsReady:  false,
 		Result:   nil,
 		Error:    nil,
@@ -25,13 +24,14 @@ func NewResultPromise() *PicoDBResultPromise {
 		ReadLock: &sync.Mutex{}}
 }
 
-func (promise *PicoDBResultPromise) Start(
-	serverConn *net.TCPConn, request *utils.PicoDBRequest) {
+func (promise *PicoDBResponsePromise) Start(
+	serverConn *utils.PicoDBServerClient,
+	request *utils.PicoDBRequest) {
 	promise.CondVar.L.Lock()
 	go promise.getResult(serverConn, request)
 }
 
-func (promise *PicoDBResultPromise) Ready() bool {
+func (promise *PicoDBResponsePromise) Ready() bool {
 	promise.ReadLock.Lock()
 	retVal := promise.IsReady
 	promise.ReadLock.Unlock()
@@ -39,7 +39,8 @@ func (promise *PicoDBResultPromise) Ready() bool {
 	return retVal
 }
 
-func (promise *PicoDBResultPromise) WaitForResult() (*utils.PicoDBResult, error) {
+func (promise *PicoDBResponsePromise) WaitForResult() (
+	*utils.PicoDBResponse, error) {
 	for !promise.IsReady {
 		promise.CondVar.Wait()
 	}
@@ -51,47 +52,23 @@ func (promise *PicoDBResultPromise) WaitForResult() (*utils.PicoDBResult, error)
 	}
 }
 
-func (promise *PicoDBResultPromise) getResult(
-	serverConn *net.TCPConn, request *utils.PicoDBRequest) {
-	bytes, err := proto.Marshal(request)
-
-	if err != nil {
-		promise.Error = err
-		promise.setIsReady()
-		return
-	}
-
-	_, err = serverConn.Write(bytes)
-
-	if err != nil {
-		promise.Error = err
-		promise.setIsReady()
-		return
-	}
-
-	buffer := make([]byte, 2048)
-	responseNumBytes, err := serverConn.Read(buffer)
+func (promise *PicoDBResponsePromise) getResult(
+	serverConn *utils.PicoDBServerClient,
+	request *utils.PicoDBRequest) {
+	response, err := (*serverConn).ProcessRequest(
+		context.Background(), request)
 
 	if err != nil {
 		promise.Error = err
 		promise.setIsReady()
 		return
 	} else {
-		result := &utils.PicoDBResult{}
-		err := proto.Unmarshal(buffer[:responseNumBytes], result)
-
-		if err != nil {
-			promise.Error = err
-			promise.setIsReady()
-			return
-		}
-
-		promise.Result = result
+		promise.Result = response
 		promise.setIsReady()
 	}
 }
 
-func (promise *PicoDBResultPromise) setIsReady() {
+func (promise *PicoDBResponsePromise) setIsReady() {
 	promise.ReadLock.Lock()
 	promise.IsReady = true
 	promise.CondVar.Broadcast()
