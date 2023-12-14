@@ -46,6 +46,9 @@ func (server *ProxyServer) ProcessRequest(
 	keyHash := server.Hash.hashString(request.Key)
 	serverID, err := server.Hash.GetNextServerIDOnRing(keyHash)
 
+	// Filter demo
+	// fmt.Printf("Received request with Key %s and Value %s", request.Key, request.Value)
+
 	if err != nil {
 		fmt.Println(err)
 		return &utils.PicoDBResponse{Key: request.Key}, err
@@ -59,6 +62,12 @@ func (server *ProxyServer) ProcessRequest(
 		return &utils.PicoDBResponse{Key: request.Key}, errors.New(
 			"storage server does not exist")
 	}
+
+	// Observer demo
+	fmt.Printf("Key %s mapped to server to ID %d\n", request.Key, serverID)
+
+	// Promise demo
+	// time.Sleep(5 * time.Second)
 
 	return (*storageServerClient).ProcessRequest(
 		context.Background(), request)

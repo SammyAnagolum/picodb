@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"time"
 
 	"github.com/SashwatAnagolum/picodb/clientlib"
 )
@@ -21,18 +20,24 @@ func main() {
 		return
 	}
 
-	fmt.Println(time.Now())
+	promise := dbClient.Put("SWENG421", "5*")
+	fmt.Println(promise.WaitForResult())
 
-	for i := 0; i < 1; i++ {
-		promise := dbClient.Put("SWENG421", "fun!")
-		fmt.Println(promise.WaitForResult())
-		promise = dbClient.Put("CMPSC445", "fun!")
-		fmt.Println(promise.WaitForResult())
-		promise = dbClient.Put("SWENG480", "fun!")
-		fmt.Println(promise.WaitForResult())
-		promise = dbClient.Put("CMPEN441", "fun!")
-		fmt.Println(promise.WaitForResult())
-	}
+	promise = dbClient.Put("CMPSC445", "5*")
+	fmt.Println(promise.WaitForResult())
 
-	fmt.Println(time.Now())
+	promise = dbClient.Put("SC120N", "5*")
+	fmt.Println(promise.WaitForResult())
+
+	promise = dbClient.Put("EARTH104N", "5*")
+	fmt.Println(promise.WaitForResult())
+
+	promise = dbClient.Put("COMM150N", "5*")
+	fmt.Println(promise.WaitForResult())
+
+	promise = dbClient.Put("CMPSC122", "5*")
+	fmt.Println(promise.WaitForResult())
+
+	promise = dbClient.Put("SWENG480", "5*")
+	fmt.Println(promise.WaitForResult())
 }
